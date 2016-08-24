@@ -1162,7 +1162,16 @@ extern int outnmea_gga(unsigned char *buff, const sol_t *sol)
         p+=sprintf(p,"*%02X%c%c",sum,0x0D,0x0A);
         return p-(char *)buff;
     }
-    for (solq=0;solq<8;solq++) if (solq_nmea[solq]==sol->stat) break;
+	
+	/* Add covariance information: ee, nn, uu, en, nu, ue in metres */
+	q = p + 1;
+    p += sprintf(p, "$GPVAR,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,%0.4f,",
+               sol->qr[0], sol->qr[1], sol->qr[2], sol->qr[3], sol->qr[4], sol->qr[5]);
+    for (sum = 0; *q; q++) sum ^= *q; /* check-sum */
+    p += sprintf(p, "*%02X%c%c\r\n", sum, 0x0D, 0x0A);
+    
+	q = p + 1;
+	for (solq=0;solq<8;solq++) if (solq_nmea[solq]==sol->stat) break;
     if (solq>=8) solq=0;
     time=gpst2utc(sol->time);
     if (time.sec>=0.995) {time.time++; time.sec=0.0;}
@@ -1175,8 +1184,9 @@ extern int outnmea_gga(unsigned char *buff, const sol_t *sol)
                ep[3],ep[4],ep[5],dms1[0],dms1[1]+dms1[2]/60.0,pos[0]>=0?"N":"S",
                dms2[0],dms2[1]+dms2[2]/60.0,pos[1]>=0?"E":"W",solq,
                sol->ns,dop,pos[2]-h,h,sol->age);
-    for (q=(char *)buff+1,sum=0;*q;q++) sum^=*q; /* check-sum */
+    for (sum=0;*q;q++) sum^=*q; /* check-sum */
     p+=sprintf(p,"*%02X%c%c",sum,0x0D,0x0A);
+
     return p-(char *)buff;
 }
 /* output solution in the form of nmea GSA sentences -------------------------*/

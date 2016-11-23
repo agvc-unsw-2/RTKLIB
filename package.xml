@@ -1,0 +1,13 @@
+<package format="2">
+<name>rtklib</name>
+<version>2.4.2</version>
+<description>
+Catkin package for RTKLIB source
+</description>
+<maintainer email="w.andrew@outlook.com">W.A.</maintainer>
+<buildtool_depend>catkin</buildtool_depend>
+<license>BSD</license>
+<export>
+<build_type>catkin</build_type>
+</export>
+</package>

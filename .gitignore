@@ -6,3 +6,9 @@ Release
 Release_Build
 Debug_Build
 __history
+*.db
+*.out
+debian/
+obj-*/
+*.a
+*.sw*

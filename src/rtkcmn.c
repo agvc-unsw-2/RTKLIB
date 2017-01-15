@@ -121,6 +121,10 @@
 *                           rename api crc32()    -> rtk_crc32()
 *           2016/08/20 1.38 fix type incompatibility in win64 environment
 *                           change constant _POSIX_C_SOURCE 199309 -> 199506
+*           2016/08/21 1.39 fix bug on week overflow in time2gpst()/gpst2time()
+*           2016/09/05 1.40 fix bug on invalid nav data read in readnav()
+*           2016/09/17 1.41 suppress warnings
+*           2016/09/19 1.42 modify api deg2dms() to consider numerical error
 *-----------------------------------------------------------------------------*/
 #define _POSIX_C_SOURCE 199506
 #include <stdarg.h>
@@ -141,9 +145,9 @@ static const char rcsid[]="$Id: rtkcmn.c,v 1.1 2008/07/17 21:48:06 ttaka Exp tta
 #define POLYCRC32   0xEDB88320u /* CRC32 polynomial */
 #define POLYCRC24Q  0x1864CFBu  /* CRC24Q polynomial */
 
-const static double gpst0[]={1980,1, 6,0,0,0}; /* gps time reference */
-const static double gst0 []={1999,8,22,0,0,0}; /* galileo system time reference */
-const static double bdt0 []={2006,1, 1,0,0,0}; /* beidou time reference */
+static const double gpst0[]={1980,1, 6,0,0,0}; /* gps time reference */
+static const double gst0 []={1999,8,22,0,0,0}; /* galileo system time reference */
+static const double bdt0 []={2006,1, 1,0,0,0}; /* beidou time reference */
 
 static double leaps[MAXLEAPS+1][7]={ /* leap seconds (y,m,d,h,m,s,utc-gpst) */
     {2017,1,1,0,0,0,-18},
@@ -1293,7 +1297,7 @@ extern gtime_t gpst2time(int week, double sec)
     gtime_t t=epoch2time(gpst0);
     
     if (sec<-1E9||1E9<sec) sec=0.0;
-    t.time+=86400*7*week+(int)sec;
+    t.time+=(time_t)86400*7*week+(int)sec;
     t.sec=sec-(int)sec;
     return t;
 }
@@ -1310,7 +1314,7 @@ extern double time2gpst(gtime_t t, int *week)
     int w=(int)(sec/(86400*7));
     
     if (week) *week=w;
-    return (double)(sec-w*86400*7)+t.sec;
+    return (double)(sec-(double)w*86400*7)+t.sec;
 }
 /* galileo system time to time -------------------------------------------------
 * convert week and tow in galileo system time (gst) to gtime_t struct
@@ -1323,7 +1327,7 @@ extern gtime_t gst2time(int week, double sec)
     gtime_t t=epoch2time(gst0);
     
     if (sec<-1E9||1E9<sec) sec=0.0;
-    t.time+=86400*7*week+(int)sec;
+    t.time+=(time_t)86400*7*week+(int)sec;
     t.sec=sec-(int)sec;
     return t;
 }
@@ -1340,7 +1344,7 @@ extern double time2gst(gtime_t t, int *week)
     int w=(int)(sec/(86400*7));
     
     if (week) *week=w;
-    return (double)(sec-w*86400*7)+t.sec;
+    return (double)(sec-(double)w*86400*7)+t.sec;
 }
 /* beidou time (bdt) to time ---------------------------------------------------
 * convert week and tow in beidou time (bdt) to gtime_t struct
@@ -1353,7 +1357,7 @@ extern gtime_t bdt2time(int week, double sec)
     gtime_t t=epoch2time(bdt0);
     
     if (sec<-1E9||1E9<sec) sec=0.0;
-    t.time+=86400*7*week+(int)sec;
+    t.time+=(time_t)86400*7*week+(int)sec;
     t.sec=sec-(int)sec;
     return t;
 }
@@ -1370,7 +1374,7 @@ extern double time2bdt(gtime_t t, int *week)
     int w=(int)(sec/(86400*7));
     
     if (week) *week=w;
-    return (double)(sec-w*86400*7)+t.sec;
+    return (double)(sec-(double)w*86400*7)+t.sec;
 }
 /* add time --------------------------------------------------------------------
 * add time to gtime_t struct
@@ -1477,7 +1481,7 @@ static int read_leaps_usno(FILE *fp)
         ls[n][0]=y;
         ls[n][1]=m;
         ls[n][2]=d;
-        ls[n++][6]=19.0-tai_utc;
+        ls[n++][6]=(char)(19.0-tai_utc);
     }
     for (i=0;i<n;i++) for (j=0;j<7;j++) {
         leaps[i][j]=ls[n-i-1][j];
@@ -1700,14 +1704,25 @@ extern void sleepms(int ms)
 * convert degree to degree-minute-second
 * args   : double deg       I   degree
 *          double *dms      O   degree-minute-second {deg,min,sec}
+*          int    ndec      I   number of decimals of second
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void deg2dms(double deg, double *dms)
+extern void deg2dms(double deg, double *dms, int ndec)
 {
     double sign=deg<0.0?-1.0:1.0,a=fabs(deg);
+    double unit=pow(0.1,ndec);
     dms[0]=floor(a); a=(a-dms[0])*60.0;
     dms[1]=floor(a); a=(a-dms[1])*60.0;
-    dms[2]=a; dms[0]*=sign;
+    dms[2]=floor(a/unit+0.5)*unit;
+    if (dms[2]>=60.0) {
+        dms[2]=0.0;
+        dms[1]+=1.0;
+        if (dms[1]>=60.0) {
+            dms[1]=0.0;
+            dms[0]+=1.0;
+        }
+    }
+    dms[0]*=sign;
 }
 /* convert deg-min-sec to degree -----------------------------------------------
 * convert degree-minute-second to degree
@@ -2733,9 +2748,9 @@ extern int readnav(const char *file, nav_t *nav)
                    &nav->eph[sat-1].toes,&nav->eph[sat-1].fit ,&nav->eph[sat-1].f0  ,
                    &nav->eph[sat-1].f1  ,&nav->eph[sat-1].f2  ,&nav->eph[sat-1].tgd[0],
                    &nav->eph[sat-1].code, &nav->eph[sat-1].flag);
-            nav->eph[prn-1].toe.time=toe_time;
-            nav->eph[prn-1].toc.time=toc_time;
-            nav->eph[prn-1].ttr.time=ttr_time;
+            nav->eph[sat-1].toe.time=toe_time;
+            nav->eph[sat-1].toc.time=toc_time;
+            nav->eph[sat-1].ttr.time=ttr_time;
         }
     }
     fclose(fp);
@@ -3158,7 +3173,7 @@ extern void createdir(const char *path)
 /* replace string ------------------------------------------------------------*/
 static int repstr(char *str, const char *pat, const char *rep)
 {
-    int len=strlen(pat);
+    int len=(int)strlen(pat);
     char buff[1024],*p,*q,*r;
     
     for (p=str,r=buff;*p;p=q+len) {

@@ -58,10 +58,10 @@ extern "C" {
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
 
-#define PATCH_LEVEL "b18"               /* patch level */
+#define PATCH_LEVEL "b26"               /* patch level */
 
 #define COPYRIGHT_RTKLIB \
-            "Copyright (C) 2007-2016 by T.Takasu\nAll rights reserved."
+            "Copyright (C) 2007-2016 T.Takasu\nAll rights reserved."
 
 #define PI          3.1415926535897932  /* pi */
 #define D2R         (PI/180.0)          /* deg to rad */
@@ -256,6 +256,7 @@ extern "C" {
 #define MAXNRPOS    16                  /* max number of reference positions */
 #define MAXLEAPS    64                  /* max number of leap seconds table */
 #define MAXGISLAYER 32                  /* max number of GIS data layers */
+#define MAXRCVCMD   4096                /* max length of receiver commands */
 
 #define RNX2VER     2.10                /* RINEX ver.2 default output version */
 #define RNX3VER     3.00                /* RINEX ver.3 default output version */
@@ -412,13 +413,15 @@ extern "C" {
 #define STR_FILE     2                  /* stream type: file */
 #define STR_TCPSVR   3                  /* stream type: TCP server */
 #define STR_TCPCLI   4                  /* stream type: TCP client */
-#define STR_UDP      5                  /* stream type: UDP stream */
 #define STR_NTRIPSVR 6                  /* stream type: NTRIP server */
 #define STR_NTRIPCLI 7                  /* stream type: NTRIP client */
 #define STR_FTP      8                  /* stream type: ftp */
 #define STR_HTTP     9                  /* stream type: http */
-#define STR_NTRIPCAS_S 10               /* stream type: NTRIP caster server */
-#define STR_NTRIPCAS_C 11               /* stream type: NTRIP caster client */
+#define STR_NTRIPC_S 10                 /* stream type: NTRIP caster server */
+#define STR_NTRIPC_C 11                 /* stream type: NTRIP caster client */
+#define STR_UDPSVR   12                 /* stream type: UDP server */
+#define STR_UDPCLI   13                 /* stream type: UDP server */
+#define STR_MEMBUF   14                 /* stream type: memory buffer */
 
 #define STRFMT_RTCM2 0                  /* stream format: RTCM 2 */
 #define STRFMT_RTCM3 1                  /* stream format: RTCM 3 */
@@ -1268,8 +1271,10 @@ typedef struct {        /* stream server type */
     int cycle;          /* server cycle (ms) */
     int buffsize;       /* input/monitor buffer size (bytes) */
     int nmeacycle;      /* NMEA request cycle (ms) (0:no) */
+    int relayback;      /* relay back of output streams (0:no) */
     int nstr;           /* number of streams (1 input + (nstr-1) outputs */
     int npb;            /* data length in peek buffer (bytes) */
+    char cmds_periodic[16][MAXRCVCMD]; /* periodic commands */
     double nmeapos[3];  /* NMEA request position (ecef) (m) */
     unsigned char *buff; /* input buffers */
     unsigned char *pbuf; /* peek buffer */
@@ -1316,6 +1321,7 @@ typedef struct {        /* RTK server type */
     int prcout;         /* missing observation data count */
     int nave;           /* number of averaging base pos */
     double rb_ave[3];   /* averaging base pos */
+    char cmds_periodic[3][MAXRCVCMD]; /* periodic commands */
     lock_t lock;        /* lock flag */
 } rtksvr_t;
 
@@ -1443,7 +1449,7 @@ EXPORT void covenu  (const double *pos, const double *P, double *Q);
 EXPORT void covecef (const double *pos, const double *Q, double *P);
 EXPORT void xyz2enu (const double *pos, double *E);
 EXPORT void eci2ecef(gtime_t tutc, const double *erpv, double *U, double *gmst);
-EXPORT void deg2dms (double deg, double *dms);
+EXPORT void deg2dms (double deg, double *dms, int ndec);
 EXPORT double dms2deg(const double *dms);
 
 /* input and output functions ------------------------------------------------*/
@@ -1740,7 +1746,11 @@ EXPORT int  strread  (stream_t *stream, unsigned char *buff, int n);
 EXPORT int  strwrite (stream_t *stream, unsigned char *buff, int n);
 EXPORT void strsync  (stream_t *stream1, stream_t *stream2);
 EXPORT int  strstat  (stream_t *stream, char *msg);
+EXPORT int  strstatx (stream_t *stream, char *msg);
 EXPORT void strsum   (stream_t *stream, int *inb, int *inr, int *outb, int *outr);
+EXPORT int  strgetsel(stream_t *stream, char *sel);
+EXPORT int  strsetsel(stream_t *stream, const char *sel);
+EXPORT int  strsetsrctbl(stream_t *stream, const char *file);
 EXPORT void strsetopt(const int *opt);
 EXPORT gtime_t strgettime(stream_t *stream);
 EXPORT void strsendnmea(stream_t *stream, const sol_t *sol);
@@ -1793,21 +1803,23 @@ EXPORT int postpos(gtime_t ts, gtime_t te, double ti, double tu,
 /* stream server functions ---------------------------------------------------*/
 EXPORT void strsvrinit (strsvr_t *svr, int nout);
 EXPORT int  strsvrstart(strsvr_t *svr, int *opts, int *strs, char **paths,
-                        strconv_t **conv, char **cmds, const double *nmeapos);
+                        strconv_t **conv, char **cmds, char **cmds_priodic,
+                        const double *nmeapos);
 EXPORT void strsvrstop (strsvr_t *svr, char **cmds);
 EXPORT void strsvrstat (strsvr_t *svr, int *stat, int *byte, int *bps, char *msg);
 EXPORT strconv_t *strconvnew(int itype, int otype, const char *msgs, int staid,
                              int stasel, const char *opt);
 EXPORT void strconvfree(strconv_t *conv);
+EXPORT void strsvrsetsrctbl(strsvr_t *svr, const char *file);
 
 /* rtk server functions ------------------------------------------------------*/
 EXPORT int  rtksvrinit  (rtksvr_t *svr);
 EXPORT void rtksvrfree  (rtksvr_t *svr);
 EXPORT int  rtksvrstart (rtksvr_t *svr, int cycle, int buffsize, int *strs,
                          char **paths, int *formats, int navsel, char **cmds,
-                         char **rcvopts, int nmeacycle, int nmeareq,
-                         const double *nmeapos, prcopt_t *prcopt,
-                         solopt_t *solopt, stream_t *moni);
+                         char **cmds_periodic, char **rcvopts, int nmeacycle,
+                         int nmeareq, const double *nmeapos, prcopt_t *prcopt,
+                         solopt_t *solopt, stream_t *moni, char *errmsg);
 EXPORT void rtksvrstop  (rtksvr_t *svr, char **cmds);
 EXPORT int  rtksvropenstr(rtksvr_t *svr, int index, int str, const char *path,
                           const solopt_t *solopt);

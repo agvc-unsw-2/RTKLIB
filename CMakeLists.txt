@@ -9,6 +9,7 @@ find_package(Threads REQUIRED)
 include_directories(include/rtklib ${catkin_INCLUDE_DIRS})
 
 set(HEADER_FILES src/rtklib.h)
+file(GLOB LIBRARY_SOURCE src/*.c src/rcv/*.c)
 
 catkin_package(
 		INCLUDE_DIRS include
@@ -26,18 +27,16 @@ add_library(${PROJECT_NAME} src/convgpx.c src/convkml.c src/convrnx.c src/datum.
 		src/rcv/nvs.c src/rcv/rcvlex.c src/rcv/rt17.c src/rcv/septentrio.c src/rcv/skytraq.c src/rcv/ss2.c
 		src/rcv/ublox.c)
 
-add_executable(rtkrcv app/rtkrcv/rtkrcv.c app/rtkrcv/vt.c ${HEADER_FILES})
+add_executable(rtkrcv app/rtkrcv/rtkrcv.c app/rtkrcv/vt.c ${LIBRARY_SOURCE} ${HEADER_FILES})
 target_link_libraries(rtkrcv
-		${PROJECT_NAME}
 		${CMAKE_THREAD_LIBS_INIT}
 		m
 		rt)
 set_target_properties(rtkrcv PROPERTIES
 		COMPILE_FLAGS "-DENAGLO -DENAQZS -DENACMP -DENAGAL -DENAIRN -DNFREQ=3 -DSVR_REUSEADDR")
 
-add_executable(str2str app/str2str/str2str.c ${HEADER_FILES})
+add_executable(str2str app/str2str/str2str.c ${LIBRARY_SOURCE} ${HEADER_FILES})
 target_link_libraries(str2str
-		${PROJECT_NAME}
 		${CMAKE_THREAD_LIBS_INIT}
 		m
 		rt)

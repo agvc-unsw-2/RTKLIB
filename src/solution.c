@@ -1129,12 +1129,9 @@ extern int outnmea_rmc(unsigned char *buff, const sol_t *sol)
     ecef2pos(sol->rr,pos);
     ecef2enu(pos,sol->rr+3,enuv);
     vel=norm(enuv,3);
-    //if (vel>=1.0) {
-        dir=atan2(enuv[0],enuv[1])*R2D;
-        if (dir<0.0) dir+=360.0;
-        dirp=dir;
-    //}
-    //else dir=dirp;
+	dir=atan2(enuv[0],enuv[1])*R2D;
+	if (dir<0.0) dir+=360.0;
+	dirp=dir;
     deg2dms(fabs(pos[0])*R2D,dms1,7);
     deg2dms(fabs(pos[1])*R2D,dms2,7);
     p+=sprintf(p,"$GPRMC,%02.0f%02.0f%05.2f,A,%02.0f%010.7f,%s,%03.0f%010.7f,%s,%4.2f,%4.2f,%02.0f%02.0f%02d,%.1f,%s,%s",

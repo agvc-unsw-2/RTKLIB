@@ -2169,14 +2169,25 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     time=rtk->sol.time; /* previous epoch */
     
     /* rover position by single point positioning */
-    if (!pntpos(obs,nu,nav,&rtk->opt,&rtk->sol,NULL,rtk->ssat,msg)) {
-        errmsg(rtk,"point pos error (%s)\n",msg);
-        
-        if (!rtk->opt.dynamics) {
-            outsolstat(rtk,nav);
-            return 0;
-        }
-    }
+	/* attempt to use backup solution */
+	sol_t *bkp_sol = &rtk->backup_solbuf.data[rtk->backup_solbuf.end];
+	if (rtk->backup_solbuf.n > 0 && fabs(timediff(bkp_sol->time, time)) < 0.4) {
+		/* backup solution is recent */
+		memcpy(&rtk->sol, bkp_sol, sizeof(sol_t));
+		trace(3, "rtkpos: using backup solution x=%lf y=%lf z=%lf",
+				rtk->sol.rr[0], rtk->sol.rr[1], rtk->sol.rr[2]);
+	} else {
+		/* use single solution */
+		if (!pntpos(obs,nu,nav,&rtk->opt,&rtk->sol,NULL,rtk->ssat,msg)) {
+			errmsg(rtk,"point pos error (%s)\n",msg);
+			
+			if (!rtk->opt.dynamics) {
+				outsolstat(rtk,nav);
+				return 0;
+			}
+		}
+	}
+
     if (time.time!=0) rtk->tt=timediff(rtk->sol.time,time);
     
     /* single point positioning */

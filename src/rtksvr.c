@@ -328,6 +328,14 @@ static int decoderaw(rtksvr_t *svr, int index)
             nav=&svr->rtcm[index].nav;
             sat=svr->rtcm[index].ephsat;
         }
+		else if (svr->format[index]==STRFMT_NMEA) {
+			solopt_t bsopt;
+			gtime_t t;
+			t.time = 0;
+			inputsol(svr->buff[index][i], t, t, 0, 0, &bsopt,
+					&svr->rtk.backup_solbuf);
+			ret = 0;
+		}
         else {
             ret=input_raw(svr->raw+index,svr->format[index],svr->buff[index][i]);
             obs=&svr->raw[index].obs;
@@ -663,6 +671,8 @@ extern int rtksvrinit(rtksvr_t *svr)
         memset(svr->rtcm+i,0,sizeof(rtcm_t));
     }
     for (i=0;i<MAXSTRRTK;i++) strinit(svr->stream+i);
+
+	initsolbuf(&svr->rtk.backup_solbuf, 1, 2);
     
     for (i=0;i<3;i++) *svr->cmds_periodic[i]='\0';
     initlock(&svr->lock);

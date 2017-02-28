@@ -445,6 +445,7 @@ extern "C" {
 #define STRFMT_RNXCLK 18                /* stream format: RINEX CLK */
 #define STRFMT_SBAS  19                 /* stream format: SBAS messages */
 #define STRFMT_NMEA  20                 /* stream format: NMEA 0183 */
+#define STRFMT_SOL   21
 #ifndef EXTLEX
 #define MAXRCVFMT    14                 /* max number of receiver format */
 #else
@@ -1206,6 +1207,7 @@ typedef struct {        /* RTK control/result type */
     int neb;            /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;       /* processing options */
+	solbuf_t backup_solbuf; /* buffer for backup solution */
 } rtk_t;
 
 typedef struct half_cyc_tag {  /* half-cycle correction list type */
